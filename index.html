@@ -13,7 +13,7 @@
             margin: 0;
             padding: 24px;
             background: #ffffff;
-            color: #171717;
+            color: #000000;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -35,22 +35,21 @@
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.05em;
-            color: #737373;
+            color: #000000;
         }
         input {
             width: 100%;
             padding: 8px 0;
             font-size: 13px;
-            color: #171717;
+            color: #000000;
             background: transparent;
             border: none;
-            border-bottom: 1px solid #d4d4d4;
+            border-bottom: 1px solid #000000;
             border-radius: 0;
             outline: none;
-            transition: border-color 0.15s ease;
         }
         input:focus {
-            border-bottom-color: #171717;
+            border-bottom-width: 2px;
         }
         
         .drag-zone {
@@ -60,49 +59,43 @@
             margin-top: 4px;
         }
 
-        /* ドラッグ＆ドロップ専用パーツ（囲みなしの軽量アイテム） */
         .drag-item {
             display: inline-flex;
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
-            background: #f5f5f5;
-            color: #262626;
+            background: #ffffff;
+            color: #000000;
             font-size: 12px;
-            font-weight: 500;
-            text-decoration: none;
-            border-radius: 4px;
+            font-weight: 700;
+            text-decoration: underline;
+            border-radius: 0;
             cursor: grab;
             user-select: none;
             width: fit-content;
-            transition: background-color 0.15s ease;
-        }
-        .drag-item:hover {
-            background: #e5e5e5;
         }
         .drag-item:active {
             cursor: grabbing;
         }
         
-        /* ドラッグできることを示すグリップアイコン */
         .drag-handle {
             display: inline-block;
             width: 10px;
             height: 14px;
-            background: #a3a3a3;
+            background: #000000;
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
             -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
         }
 
         .help-text {
             font-size: 11px;
-            color: #a3a3a3;
+            color: #000000;
             line-height: 1.4;
         }
 
         .msg {
             font-size: 13px;
-            color: #525252;
+            color: #000000;
             text-align: center;
             display: none;
         }
@@ -129,59 +122,6 @@
 
 <script>
 (function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetSlackUrl = urlParams.get('url');
-
-    if (targetSlackUrl) {
-        document.getElementById('app').style.display = 'none';
-        const msg = document.getElementById('msg');
-        msg.style.display = 'block';
-
-        const channelName = 'single_pop_channel_' + btoa(targetSlackUrl).slice(-10);
-        const bc = new BroadcastChannel(channelName);
-        let responded = false;
-
-        // 既存の中継親タブがからの応答（PONG）待ち
-        bc.onmessage = (e) => {
-            if (e.data === 'PONG') {
-                responded = true;
-                // 既存の親タブがSlackにフォーカスしてくれたので、この中継タブは閉じる
-                bc.close();
-                window.close();
-            }
-        };
-
-        // 既存の中継親タブに問い合わせ
-        bc.postMessage({ type: 'PING' });
-
-        // 120ms 待っても返答がない場合 ＝ 自分が最初の親タブになる
-        setTimeout(() => {
-            if (!responded) {
-                const w = Math.floor(window.screen.width / 2);
-                const slackWin = window.open(targetSlackUrl, '_blank', `width=${w},height=${window.screen.height},left=0,top=0,resizable=yes,scrollbars=yes`);
-                
-                // 自分が「親」として常駐し、後から開かれた中継タブからの要求を処理する
-                bc.onmessage = (e) => {
-                    if (e.data && e.data.type === 'PING') {
-                        bc.postMessage('PONG');
-                        if (slackWin && !slackWin.closed) {
-                            slackWin.focus();
-                        } else {
-                            // もしポップアップが閉じられていたら再オープン
-                            window.open(targetSlackUrl, '_blank', `width=${w},height=${window.screen.height},left=0,top=0,resizable=yes,scrollbars=yes`);
-                        }
-                    }
-                };
-                
-                // 親タブ自体はユーザーの目につかないようバックグラウンドで動作し、必要時閉じる
-                msg.textContent = "Slackポップアップを起動しました。このタブを閉じると重複防止が解除されます。";
-            }
-        }, 120);
-
-        return;
-    }
-
-    // --- ブックマークレット生成ロジック ---
     const urlInput = document.getElementById('url');
     const bm = document.getElementById('bm');
 
@@ -192,15 +132,21 @@
             return;
         }
 
-        const currentUrl = window.location.href.split('?')[0];
-        const proxyUrl = currentUrl + '?url=' + encodeURIComponent(val);
+        // URLから英数字のみの固有ウィンドウ名を生成（重複防止用キー）
+        const winName = 'SlackPopup_' + val.replace(/[^a-zA-Z0-9]/g, '');
 
-        const code = `javascript:(() => { window.open('${proxyUrl}', '_blank'); })();`;
+        // ブックマークレット本体: 中継ページを挟まず直接名前付きウィンドウで開く
+        // これにより既存ウィンドウがある場合はブラウザが自動でフォーカスし、新規タブは発生しない
+        const code = `javascript:(() => {
+            const url = '${val}';
+            const w = Math.floor(window.screen.width / 2);
+            const h = window.screen.height;
+            window.open(url, '${winName}', \`width=\${w},height=\${h},left=0,top=0,resizable=yes,scrollbars=yes\`);
+        })();`;
 
         bm.setAttribute('href', code);
     });
 })();
 </script>
-
 </body>
 </html>
