@@ -134,12 +134,35 @@
         </a>
         <div class="help-text">上記の要素をブラウザのブックマークバーへドラッグ＆ドロップして登録してください</div>
     </div>
+
+    <!-- 手動で最前面に持ち上げるためのボタンを追加 -->
+    <div class="field" style="margin-top: 10px;">
+        <button id="focus-btn" type="button" style="width: 100%; padding: 12px; background: #000; color: #fff; border: 1px solid #000; font-size: 12px; font-weight: bold; cursor: pointer;">
+            最前面に表示 / 起動
+        </button>
+    </div>
 </div>
 
 <script>
 (function() {
     const urlInput = document.getElementById('url');
     const bm = document.getElementById('bm');
+    const focusBtn = document.getElementById('focus-btn');
+
+    // ボタン直接クリックで100%最前面化
+    focusBtn.addEventListener('click', () => {
+        const val = urlInput.value.trim();
+        if (!val) return;
+
+        const w = Math.floor(window.screen.width / 2);
+        const h = window.screen.height;
+        const slackWin = window.open(val, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
+        if (slackWin) {
+            try {
+                slackWin.focus();
+            } catch (e) {}
+        }
+    });
 
     urlInput.addEventListener('input', () => {
         const val = urlInput.value.trim();
