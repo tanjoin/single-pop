@@ -153,7 +153,15 @@
         const code = `javascript:(() => {
             const target = '${encodeURIComponent(val)}';
             const hub = '${hubUrl}';
-            window.open(hub + '?target=' + target, '_blank');
+            
+            // 現在のページが中継ページ自身である場合、直接ポップアップを開く
+            if (window.location.href.startsWith(hub)) {
+                const w = Math.floor(window.screen.width / 2);
+                const h = window.screen.height;
+                window.open(decodeURIComponent(target), 'single_slack_window_instance', \`width=\${w},height=\${h},left=0,top=0\`);
+            } else {
+                window.open(hub + '?target=' + target, '_blank');
+            }
         })();`;
 
         bm.setAttribute('href', code);
