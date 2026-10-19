@@ -12,7 +12,7 @@ function requestUrl(target, nonce = '1') {
     return hub + '#' + new URLSearchParams({ target, request: 'bookmarklet', nonce });
 }
 
-function setup({ href = hub, navigationType = 'navigate', blocked = false, lock, stored = '' } = {}) {
+function setup({ href = hub, navigationType = 'navigate', blocked = false, lock, stored = '', closeBlocked = false } = {}) {
     const elements = Object.fromEntries(['url', 'bm', 'focus-btn', 'status'].map(id => [id, {
         value: '',
         attributes: {},
@@ -54,6 +54,12 @@ function setup({ href = hub, navigationType = 'navigate', blocked = false, lock,
         history: { replaceState(state, title, url) { context.window.location = new URL(url); } },
         open(...args) { calls.push(['open', ...args]); return blocked ? null : popup; },
         focus() {},
+        closed: false,
+        closeCount: 0,
+        close() {
+            this.closeCount++;
+            if (!closeBlocked) this.closed = true;
+        },
         addEventListener(type, listener) { listeners[type] = listener; }
     };
     if (lock !== undefined) {
@@ -179,6 +185,48 @@ test('only the lock owner opens forwarded requests', () => {
     assert.equal(owner.calls.length, 1);
     owner.context.channel.onmessage({ data: { type: 'OPEN', target: 'javascript:alert(1)' } });
     assert.equal(owner.calls.length, 1);
+});
+
+test('a duplicate relay closes only after its own request is acknowledged', () => {
+    const owner = setup({ lock: true });
+    const follower = setup({ lock: false, href: requestUrl('https://target.example/') });
+    assert.equal(follower.context.window.closeCount, 0);
+    follower.context.channel.onmessage({ data: { type: 'HANDLED', requestId: 'unrelated' } });
+    assert.equal(follower.context.window.closeCount, 0);
+    owner.context.channel.onmessage({ data: follower.messages[0] });
+    follower.context.channel.onmessage({ data: owner.messages[0] });
+    assert.equal(follower.context.window.closed, true);
+    assert.equal(owner.calls.length, 1);
+    assert.equal(follower.calls.length, 0);
+});
+
+test('a duplicate without a launch request activates the owner and closes', () => {
+    const owner = setup({ lock: true });
+    const follower = setup({ lock: false });
+    assert.equal(follower.messages[0].type, 'ACTIVATE');
+    owner.context.channel.onmessage({ data: follower.messages[0] });
+    follower.context.channel.onmessage({ data: owner.messages[0] });
+    assert.equal(follower.context.window.closed, true);
+    assert.equal(owner.calls.length, 0);
+    assert.equal(follower.calls.length, 0);
+});
+
+test('a duplicate relay explains when the browser refuses to close it', () => {
+    const owner = setup({ lock: true });
+    const follower = setup({ lock: false, closeBlocked: true });
+    owner.context.channel.onmessage({ data: follower.messages[0] });
+    follower.context.channel.onmessage({ data: owner.messages[0] });
+    assert.equal(follower.context.window.closeCount, 1);
+    assert.equal(follower.context.window.closed, false);
+    assert.match(follower.elements.status.textContent, /このタブを閉じて/);
+});
+
+test('a relay retains an unacknowledged launch if the owner disappears', () => {
+    const app = setup({ lock: false, href: requestUrl('https://target.example/') });
+    app.pendingLocks[0]({});
+    assert.equal(app.calls.length, 1);
+    assert.equal(app.calls[0][1], 'https://target.example/');
+    assert.equal(app.context.window.closeCount, 0);
 });
 
 test('a waiting relay takes ownership without opening on takeover', () => {

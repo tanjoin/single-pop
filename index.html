@@ -170,6 +170,15 @@
     let activeTarget = null;
     let isOwner = true;
     let channel = null;
+    const pendingRequests = new Map();
+    const instanceId = Math.random().toString(36).slice(2);
+    let requestSequence = 0;
+
+    function forwardRequest(target = null) {
+        const requestId = instanceId + ':' + ++requestSequence;
+        pendingRequests.set(requestId, target);
+        channel.postMessage({ type: target ? 'OPEN' : 'ACTIVATE', target, requestId });
+    }
 
     function normalizeTarget(value) {
         try {
@@ -202,7 +211,7 @@
     function openPopup(target) {
         if (!target) return;
         if (!isOwner) {
-            channel.postMessage({ type: 'OPEN', target });
+            forwardRequest(target);
             status.textContent = '管理中の中継ページに送信しました。前面に出ない場合は、そのページのボタンを押してください。';
             return;
         }
@@ -262,26 +271,47 @@
     if ('BroadcastChannel' in window && navigator.locks) {
         channel = new BroadcastChannel('single_pop_hub');
         isOwner = false;
+        channel.onmessage = event => {
+            const message = event.data;
+            if (!message) return;
+            if (!isOwner) {
+                if (message.type !== 'HANDLED' || !pendingRequests.has(message.requestId)) return;
+                pendingRequests.delete(message.requestId);
+                if (pendingRequests.size) return;
+                status.textContent = '管理中の中継ページに引き継ぎました。この重複ページを閉じます。';
+                window.close();
+                if (!window.closed) {
+                    status.textContent = '管理中の中継ページに引き継ぎました。このタブを閉じてください。';
+                }
+                return;
+            }
+            const target = message.type === 'OPEN' ? normalizeTarget(message.target) : null;
+            if (!target && message.type !== 'ACTIVATE') return;
+            window.focus();
+            if (target) {
+                urlInput.value = target;
+                updateBookmarklet();
+                openPopup(target);
+            }
+            channel.postMessage({ type: 'HANDLED', requestId: message.requestId });
+        };
         function takeOwnership() {
             isOwner = true;
             window.name = hubName;
             updateBookmarklet();
-            channel.onmessage = event => {
-                const target = event.data && event.data.type === 'OPEN'
-                    ? normalizeTarget(event.data.target) : null;
-                if (!target) return;
-                urlInput.value = target;
-                updateBookmarklet();
-                window.focus();
-                openPopup(target);
-            };
+            const targets = [...pendingRequests.values()];
+            pendingRequests.clear();
+            for (const target of targets) {
+                if (target) openPopup(target);
+            }
         }
         navigator.locks.request('single_pop_hub_owner', { ifAvailable: true }, lock => {
             isOwner = Boolean(lock);
             if (isOwner) takeOwnership();
             consumeRequest(true);
             if (isOwner) return new Promise(() => {});
-            status.textContent = '別の中継ページが遷移先を管理しています。操作は管理中のページから行ってください。';
+            if (!pendingRequests.size) forwardRequest();
+            status.textContent = '管理中の中継ページへの引き継ぎを待っています。';
             return navigator.locks.request('single_pop_hub_owner', () => {
                 takeOwnership();
                 return new Promise(() => {});
