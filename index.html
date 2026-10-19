@@ -148,23 +148,43 @@
     const bm = document.getElementById('bm');
     const focusBtn = document.getElementById('focus-btn');
 
+    // 既に開いたポップアップのウィンドウ参照を保持する変数
+    let activePopupWin = null;
+
     // 中継タブ同士の重複制御用チャンネル
     const bc = new BroadcastChannel('single_hub_tab_channel');
 
-    // ポップアップを開く共通関数
+    // ポップアップを開く/最前面化する共通関数（多重オープン完全防止）
     function openPopup(target) {
         if (!target) return;
+
+        // 既存のウィンドウが開いており、まだ閉じられていない場合はフォーカスのみ行う
+        if (activePopupWin && !activePopupWin.closed) {
+            try {
+                // URLを変更せずに再利用する場合はフォーカス、URLを変えたい場合はlocation更新
+                if (activePopupWin.location.href !== target) {
+                    activePopupWin.location.href = target;
+                }
+                activePopupWin.focus();
+                return;
+            } catch (e) {
+                // クロスドメイン等で参照エラーになった場合は新規開き直し（インスタンス再取得）
+                activePopupWin = null;
+            }
+        }
+
         const w = Math.floor(window.screen.width / 2);
         const h = window.screen.height;
-        const slackWin = window.open(target, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
-        if (slackWin) {
+        // 同一ウィンドウ名を与えて強制的に単一化を図る
+        activePopupWin = window.open(target, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
+        if (activePopupWin) {
             try {
-                slackWin.focus();
+                activePopupWin.focus();
             } catch (e) {}
         }
     }
 
-    // ボタン直接クリックによる手動アクティブ化
+    // 手動ボタンクリックによる起動・最前面化
     focusBtn.addEventListener('click', () => {
         const val = urlInput.value.trim();
         openPopup(val);
@@ -180,7 +200,7 @@
 
         const hubUrl = window.location.href.split('#')[0].split('?')[0];
 
-        // ブックマークレットコード: 既存の中継タブがあればそこに通知、なければ新規タブで開く
+        // ブックマークレットコード: 中継タブがあればそこに通知、なければ新規タブで開く
         const code = `javascript:(() => {
             const target = '${encodeURIComponent(val)}';
             const hub = '${hubUrl}';
