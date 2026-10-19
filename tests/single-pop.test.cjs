@@ -26,10 +26,12 @@ function setup({ href = hub, navigationType = 'navigate', blocked = false, lock,
     const pendingLocks = [];
     const scheduled = [];
     const storage = new Map([['single-pop-target', stored]]);
+    let popupCloseCount = 0;
     const popup = {
         closed: false,
         focusCount: 0,
         focus() { this.focusCount++; },
+        close() { popupCloseCount++; this.closed = true; },
         location: {
             get href() { throw new Error('Cross-origin read'); },
             set href(value) { calls.push(['navigate', value]); }
@@ -90,6 +92,8 @@ function setup({ href = hub, navigationType = 'navigate', blocked = false, lock,
         listeners.hashchange({ type: 'hashchange' });
     }
     return { elements, calls, popup, context, messages, pendingLocks, scheduled, input, request,
+        get popupCloseCount() { return popupCloseCount; },
+        pagehide: event => listeners.pagehide(event),
         click: () => elements['focus-btn'].listeners.click() };
 }
 
@@ -120,6 +124,17 @@ test('a closed popup can be opened again', () => {
     app.click();
     assert.equal(app.calls.length, 2);
     assert.equal(app.calls[0][2], app.calls[1][2]);
+});
+
+test('the owner relay closes its popup when leaving, but not when entering the back-forward cache', () => {
+    const app = setup({ lock: true });
+    app.input('https://target.example/');
+    app.click();
+    app.pagehide({ persisted: true });
+    assert.equal(app.popup.closed, false);
+    app.pagehide({ persisted: false });
+    assert.equal(app.popup.closed, true);
+    assert.equal(app.popupCloseCount, 1);
 });
 
 test('a launch request is consumed without double-decoding the URL', () => {

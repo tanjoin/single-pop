@@ -127,6 +127,12 @@
             line-height: 1.6;
             overflow-wrap: anywhere;
         }
+
+        .updated-at {
+            font-size: 10px;
+            color: #888888;
+            text-align: right;
+        }
     </style>
 </head>
 <body>
@@ -150,6 +156,7 @@
             最前面に表示 / 起動
         </button>
         <p id="status" role="status" aria-live="polite"></p>
+        <p class="updated-at">更新日: 2026-10-20</p>
     </div>
 </div>
 
@@ -289,6 +296,12 @@
     });
     urlInput.addEventListener('input', updateBookmarklet);
     window.addEventListener('hashchange', consumeRequest);
+    window.addEventListener('pagehide', event => {
+        if (event.persisted || !isOwner) return;
+        try {
+            if (activePopupWin && !activePopupWin.closed) activePopupWin.close();
+        } catch {}
+    });
 
     try {
         urlInput.value = localStorage.getItem(storageKey) || '';
