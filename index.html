@@ -18,7 +18,6 @@
             min-height: 100vh;
             display: flex;
             align-items: center;
-
             padding: 24px;
         }
 
@@ -135,7 +134,7 @@
         <div class="help-text">上記の要素をブラウザのブックマークバーへドラッグ＆ドロップして登録してください</div>
     </div>
 
-    <!-- 手動で最前面に持ち上げるためのボタンを追加 -->
+    <!-- 手動で最前面に持ち上げるためのボタン -->
     <div class="field" style="margin-top: 10px;">
         <button id="focus-btn" type="button" style="width: 100%; padding: 12px; background: #000; color: #fff; border: 1px solid #000; font-size: 12px; font-weight: bold; cursor: pointer;">
             最前面に表示 / 起動
@@ -165,12 +164,13 @@
         }
     }
 
-    // ボタン直接クリックで100%最前面化
+    // ボタン直接クリックによる手動アクティブ化
     focusBtn.addEventListener('click', () => {
         const val = urlInput.value.trim();
         openPopup(val);
     });
 
+    // 入力変更に応じてブックマークレットを更新
     urlInput.addEventListener('input', () => {
         const val = urlInput.value.trim();
         if (!val) {
@@ -180,16 +180,34 @@
 
         const hubUrl = window.location.href.split('#')[0].split('?')[0];
 
-        // 簡潔かつ確実に中継ページを開くブックマークレットコード
+        // ブックマークレットコード: 既存の中継タブがあればそこに通知、なければ新規タブで開く
         const code = `javascript:(() => {
             const target = '${encodeURIComponent(val)}';
             const hub = '${hubUrl}';
-            window.open(hub + '?target=' + target, '_blank');
+            
+            // 既に中継ページが開いているかBroadcastChannelで打診する
+            const channel = new BroadcastChannel('single_hub_tab_channel');
+            let acknowledged = false;
+            
+            channel.onmessage = (e) => {
+                if (e.data && e.data.type === 'HUB_ALREADY_OPEN') {
+                    acknowledged = true;
+                }
+            };
+            
+            channel.postMessage({ type: 'CHECK_HUB_OPEN', target: target });
+            
+            setTimeout(() => {
+                if (!acknowledged) {
+                    window.open(hub + '?target=' + target, '_blank');
+                }
+            }, 100);
         })();`;
 
         bm.setAttribute('href', code);
     });
 
+    // ページ読み込み時にパラメータがあるかチェック（ブックマークレット経由の場合のみ起動）
     const params = new URLSearchParams(window.location.search);
     const targetUrl = params.get('target');
 
@@ -197,34 +215,41 @@
         const decodedUrl = decodeURIComponent(targetUrl);
         urlInput.value = decodedUrl;
 
+        // リロード時に勝手にポップアップが開くのを防ぐためURLからパラメータを即座に削除
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
         let isDuplicate = false;
 
-        // 他の中継タブが存在するか確認のメッセージを送る
+        // 他の中継タブが存在するかチェック
         bc.postMessage({ type: 'CHECK_HUB_OPEN', target: decodedUrl });
 
-        // 他の中継タブからの応答またはコマンドを待つ
+        // メッセージリスナー
         bc.onmessage = (e) => {
             if (e.data.type === 'HUB_ALREADY_OPEN') {
-                // すでに中継タブが開いているため、自分（重複して開いた新規タブ）は閉じる
+                // 既に他のタブがアクティブな場合は、新しく開いたこの重複タブを閉じる
                 isDuplicate = true;
                 window.close();
             } else if (e.data.type === 'CHECK_HUB_OPEN') {
                 // 自分が「既存の中継タブ」である場合、新規タブに対して存在を通知し、ポップアップを開く
                 bc.postMessage({ type: 'HUB_ALREADY_OPEN' });
                 window.focus();
-                urlInput.value = e.data.target;
-                openPopup(e.data.target);
+                if (e.data.target) {
+                    urlInput.value = e.data.target;
+                    openPopup(e.data.target);
+                }
             }
         };
 
-        // 少し待って重複応答がなければ、自分が唯一の中継タブとして機能する
+        // 少し待って重複がなければ自分が唯一の中継タブとして動作する
         setTimeout(() => {
             if (!isDuplicate) {
                 openPopup(decodedUrl);
             }
         }, 150);
     } else {
-        // 通常開かれた中継タブも応答をリスニング
+        // 通常開かれた中継タブも他からのアクティブ化要求をリッスン
         bc.onmessage = (e) => {
             if (e.data.type === 'CHECK_HUB_OPEN') {
                 bc.postMessage({ type: 'HUB_ALREADY_OPEN' });
