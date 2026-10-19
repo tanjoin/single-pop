@@ -189,7 +189,7 @@
     const targetUrl = params.get('target');
 
     if (targetUrl) {
-        updateStatus('Slackを起動中...');
+        updateStatus('起動中...');
         const decodedUrl = decodeURIComponent(targetUrl);
         
         const bc = new BroadcastChannel('single_slack_channel');
@@ -198,6 +198,18 @@
         bc.onmessage = (e) => {
             if (e.data && e.data.type === 'PONG') {
                 hasOwner = true;
+                
+                // 【Option 2: 親タブのアクティブ化権限を利用した最前面引き揚げ】
+                // Mac等で最前面に出ない対策：ユーザーアクション直後の親タブから直接既存ウィンドウ名を開き直す
+                try {
+                    const slackWin = window.open('', 'single_slack_window_instance');
+                    if (slackWin) {
+                        slackWin.focus();
+                    }
+                } catch (err) {
+                    console.log(err);
+                }
+
                 updateStatus('既存ウィンドウに切り替えました（このタブを閉じます）');
                 setTimeout(() => window.close(), 100);
             }
@@ -212,22 +224,17 @@
                 // ウィンドウ名を固定して開く
                 const slackWin = window.open(decodedUrl, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
 
-                updateStatus('Slack起動完了（単一ウィンドウ実行中）');
+                updateStatus('起動完了（単一ウィンドウ実行中）');
 
                 bc.onmessage = (e) => {
                     if (e.data && e.data.type === 'PING') {
                         if (slackWin && !slackWin.closed) {
-                            // ブラウザのフォーカス制限を回避するための処理
+                            // 裏技手法の併用
                             try {
-                                // ウィンドウの位置・サイズを極小変更してブラウザのフォーカス制限を回避
                                 slackWin.moveBy(1, 1);
                                 slackWin.moveBy(-1, -1);
                                 slackWin.resizeBy(1, 1);
                                 slackWin.resizeBy(-1, -1);
-
-                                slackWin.focus();
-                                // 一度再オープン（再フォーカス権限の付与）を試みる
-                                window.open('', 'single_slack_window_instance');
                                 slackWin.focus();
                             } catch (err) {
                                 console.log(err);
