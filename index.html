@@ -7,36 +7,43 @@
     <style>
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-            padding: 24px;
             background: #ffffff;
             color: #000000;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 24px;
         }
+
         .container {
             width: 100%;
-            max-width: 320px;
+            max-width: 360px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 28px;
         }
+
         .field {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
         }
+
         label {
             font-size: 11px;
             font-weight: 700;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.08em;
             color: #000000;
+            text-transform: uppercase;
         }
+
         input {
             width: 100%;
             padding: 8px 0;
@@ -48,42 +55,44 @@
             border-radius: 0;
             outline: none;
         }
+
         input:focus {
             border-bottom-width: 2px;
         }
-        
+
         .drag-zone {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            margin-top: 4px;
+            gap: 12px;
         }
 
         .drag-item {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
+            gap: 10px;
+            padding: 10px 14px;
             background: #ffffff;
             color: #000000;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
             text-decoration: underline;
+            border: 1px solid #000000;
             border-radius: 0;
             cursor: grab;
             user-select: none;
             width: fit-content;
         }
+
         .drag-item:active {
             cursor: grabbing;
         }
-        
+
         .drag-handle {
             display: inline-block;
             width: 10px;
             height: 14px;
             background: #000000;
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
             -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
         }
 
@@ -93,89 +102,109 @@
             line-height: 1.4;
         }
 
-        .status {
+        .status-bar {
             font-size: 12px;
-            padding: 8px;
+            padding: 8px 12px;
             border: 1px solid #000000;
-            text-align: center;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+        }
+
+        .status-bar:empty {
+            display: none;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="status" class="status">親タブ待機中</div>
+    <div id="status" class="status-bar"></div>
 
     <div class="field">
-        <label for="url">SLACK URL</label>
+        <label for="url">Slack URL</label>
         <input type="text" id="url" placeholder="https://app.slack.com/client/...">
     </div>
     
     <div class="drag-zone">
         <a id="bm" class="drag-item" href="#" onclick="return false;">
             <span class="drag-handle"></span>
-            <span>Slack Popup (ブックマークバーへドラッグ)</span>
+            <span>Slack Popup</span>
         </a>
-        <div class="help-text">上記の要素をつかんでそのままブックマークバーへ追加してください</div>
+        <div class="help-text">上記の要素をブラウザのブックマークバーへドラッグ＆ドロップして登録してください</div>
     </div>
 </div>
 
 <script>
 (function() {
-    const channel = new BroadcastChannel('slack_single_pop_channel');
-    const statusEl = document.getElementById('status');
     const urlInput = document.getElementById('url');
     const bm = document.getElementById('bm');
+    const status = document.getElementById('status');
 
-    let slackWin = null;
+    function updateStatus(msg) {
+        status.textContent = msg;
+    }
 
-    // ブックマークレットからの要求を受け取ってSlackポップアップを開く/フォーカスする
-    channel.onmessage = (e) => {
-        if (!e.data || !e.data.targetUrl) return;
-        const targetUrl = e.data.targetUrl;
-
-        statusEl.textContent = 'リクエスト受信: ' + targetUrl;
-
-        // すでにウィンドウが開いており、閉じられていない場合
-        if (slackWin && !slackWin.closed) {
-            // URLが違う場合は切り替え
-            try {
-                if (slackWin.location.href !== targetUrl) {
-                    slackWin.location.href = targetUrl;
-                }
-            } catch(err) {
-                // クロスオリジンでhrefが読めない場合はそのまま上書き
-                slackWin.location.href = targetUrl;
-            }
-            slackWin.focus();
-        } else {
-            // 新規にポップアップを作成
-            const w = Math.floor(window.screen.width / 2);
-            const h = window.screen.height;
-            slackWin = window.open(targetUrl, 'single_slack_popup_win', `width=${w},height=${h},left=0,top=0,resizable=yes,scrollbars=yes`);
-            if (slackWin) {
-                slackWin.focus();
-            }
-        }
-    };
-
-    // ブックマークレットのコード生成
     urlInput.addEventListener('input', () => {
         const val = urlInput.value.trim();
         if (!val) {
             bm.setAttribute('href', '#');
+            updateStatus('');
             return;
         }
 
-        // BroadcastChannel 経由で親タブにURLを送るだけのブックマークレット
+        updateStatus('ブックマーク準備完了（バーへドラッグ＆ドロップ）');
+
+        const hubUrl = window.location.href.split('#')[0].split('?')[0];
+
         const code = `javascript:(() => {
-            const bc = new BroadcastChannel('slack_single_pop_channel');
-            bc.postMessage({ targetUrl: '${val.replace(/'/g, "\\'")}' });
-            bc.close();
+            const target = '${encodeURIComponent(val)}';
+            const hub = '${hubUrl}';
+            window.open(hub + '?target=' + target, '_blank');
         })();`;
 
         bm.setAttribute('href', code);
     });
+
+    const params = new URLSearchParams(window.location.search);
+    const targetUrl = params.get('target');
+
+    if (targetUrl) {
+        updateStatus('Slackを起動中...');
+        const decodedUrl = decodeURIComponent(targetUrl);
+        
+        const bc = new BroadcastChannel('single_slack_channel');
+        let hasOwner = false;
+
+        bc.onmessage = (e) => {
+            if (e.data && e.data.type === 'PONG') {
+                hasOwner = true;
+                updateStatus('既存ウィンドウに切り替えました（このタブを閉じます）');
+                setTimeout(() => window.close(), 100);
+            }
+        };
+
+        bc.postMessage({ type: 'PING' });
+
+        setTimeout(() => {
+            if (!hasOwner) {
+                const w = Math.floor(window.screen.width / 2);
+                const h = window.screen.height;
+                const slackWin = window.open(decodedUrl, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
+
+                updateStatus('Slack起動完了（単一ウィンドウ実行中）');
+
+                bc.onmessage = (e) => {
+                    if (e.data && e.data.type === 'PING') {
+                        if (slackWin && !slackWin.closed) {
+                            slackWin.focus();
+                            bc.postMessage({ type: 'PONG' });
+                        }
+                    }
+                };
+            }
+        }, 200);
+    }
 })();
 </script>
 </body>
