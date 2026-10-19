@@ -223,6 +223,18 @@ test('an activated duplicate focuses the existing destination and then closes', 
     assert.equal(owner.calls.length, 1);
 });
 
+test('a duplicate stays open if its button cannot obtain the destination', () => {
+    const target = 'https://target.example/';
+    const owner = setup({ lock: true });
+    const follower = setup({ lock: false, href: requestUrl(target), blocked: true });
+    owner.context.channel.onmessage({ data: follower.messages[0] });
+    follower.context.channel.onmessage({ data: owner.messages[0] });
+    follower.click();
+    assert.equal(follower.context.window.closeCount, 0);
+    assert.equal(follower.context.window.closed, false);
+    assert.match(follower.elements.status.textContent, /ポップアップを許可/);
+});
+
 test('a duplicate relay stays open and explains when the browser refuses to close it', () => {
     const owner = setup({ lock: true });
     owner.input('https://target.example/');
