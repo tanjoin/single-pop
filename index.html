@@ -132,16 +132,23 @@
             return;
         }
 
-        // URLから英数字のみの固有ウィンドウ名を生成（重複防止用キー）
-        const winName = 'SlackPopup_' + val.replace(/[^a-zA-Z0-9]/g, '');
+        // URLから英数字のみの固有ウィンドウ名を生成
+        const winName = 'slack_pop_' + val.replace(/[^a-zA-Z0-9]/g, '');
 
-        // ブックマークレット本体: 中継ページを挟まず直接名前付きウィンドウで開く
-        // これにより既存ウィンドウがある場合はブラウザが自動でフォーカスし、新規タブは発生しない
+        // 中継ページを一切挟まず、ブラウザのウィンドウ名制御で直接開く・フォーカスするコード
         const code = `javascript:(() => {
-            const url = '${val}';
             const w = Math.floor(window.screen.width / 2);
             const h = window.screen.height;
-            window.open(url, '${winName}', \`width=\${w},height=\${h},left=0,top=0,resizable=yes,scrollbars=yes\`);
+            const targetUrl = '${val.replace(/'/g, "\\'")}';
+            const winName = '${winName}';
+            
+            const win = window.open('', winName, \`width=\${w},height=\${h},left=0,top=0,resizable=yes,scrollbars=yes\`);
+            if (win) {
+                if (win.location.href === 'about:blank' || !win.location.href) {
+                    win.location.href = targetUrl;
+                }
+                win.focus();
+            }
         })();`;
 
         bm.setAttribute('href', code);
