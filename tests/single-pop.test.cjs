@@ -205,7 +205,7 @@ test('only the lock owner opens forwarded requests', () => {
     assert.equal(owner.calls.length, 1);
 });
 
-test('a duplicate relay stays open until its button focuses the destination', () => {
+test('a duplicate relay closes after its launch request is acknowledged', () => {
     const owner = setup({ lock: true });
     const follower = setup({ lock: false, href: requestUrl('https://target.example/') });
     assert.equal(follower.context.window.closeCount, 0);
@@ -213,17 +213,12 @@ test('a duplicate relay stays open until its button focuses the destination', ()
     assert.equal(follower.context.window.closeCount, 0);
     owner.context.channel.onmessage({ data: follower.messages[0] });
     follower.context.channel.onmessage({ data: owner.messages[0] });
-    assert.equal(follower.context.window.closed, false);
-    assert.match(follower.elements['focus-btn'].textContent, /最前面に表示して閉じる/);
-    follower.click();
     assert.equal(follower.context.window.closed, true);
-    assert.equal(follower.popup.focusCount, 1);
-    assert.equal(follower.calls[0][1], '');
-    assert.equal(follower.calls[0][2], 'single_pop_destination');
+    assert.equal(follower.context.window.closeCount, 1);
     assert.equal(owner.calls.length, 1);
 });
 
-test('an activated duplicate focuses the existing destination and then closes', () => {
+test('a duplicate without a launch request closes after activation is acknowledged', () => {
     const owner = setup({ lock: true });
     owner.input('https://target.example/');
     owner.click();
@@ -231,36 +226,20 @@ test('an activated duplicate focuses the existing destination and then closes', 
     assert.equal(follower.messages[0].type, 'ACTIVATE');
     owner.context.channel.onmessage({ data: follower.messages[0] });
     follower.context.channel.onmessage({ data: owner.messages[0] });
-    assert.equal(follower.context.window.closed, false);
-    follower.click();
     assert.equal(follower.context.window.closed, true);
-    assert.equal(follower.popup.focusCount, 1);
+    assert.equal(follower.context.window.closeCount, 1);
     assert.equal(owner.calls.length, 1);
 });
 
-test('a duplicate stays open if its button cannot obtain the destination', () => {
-    const target = 'https://target.example/';
-    const owner = setup({ lock: true });
-    const follower = setup({ lock: false, href: requestUrl(target), blocked: true });
-    owner.context.channel.onmessage({ data: follower.messages[0] });
-    follower.context.channel.onmessage({ data: owner.messages[0] });
-    follower.click();
-    assert.equal(follower.context.window.closeCount, 0);
-    assert.equal(follower.context.window.closed, false);
-    assert.match(follower.elements.status.textContent, /ポップアップを許可/);
-});
-
-test('a duplicate relay stays open and explains when the browser refuses to close it', () => {
+test('a duplicate explains when the browser refuses to close it after acknowledgement', () => {
     const owner = setup({ lock: true });
     owner.input('https://target.example/');
     const follower = setup({ lock: false, stored: 'https://target.example/', closeBlocked: true });
     owner.context.channel.onmessage({ data: follower.messages[0] });
     follower.context.channel.onmessage({ data: owner.messages[0] });
-    assert.equal(follower.context.window.closeCount, 0);
-    follower.click();
     assert.equal(follower.context.window.closeCount, 1);
     assert.equal(follower.context.window.closed, false);
-    assert.match(follower.elements.status.textContent, /手動で閉じて/);
+    assert.match(follower.elements.status.textContent, /このタブを閉じて/);
 });
 
 test('a relay retains an unacknowledged launch if the owner disappears', () => {

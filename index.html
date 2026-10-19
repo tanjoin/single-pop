@@ -176,7 +176,6 @@
     let activePopupWin = null;
     let activeTarget = null;
     let isOwner = true;
-    let isDuplicateReady = false;
     let channel = null;
     const pendingRequests = new Map();
     const instanceId = Math.random().toString(36).slice(2);
@@ -267,33 +266,7 @@
         openPopup(target);
     }
 
-    focusBtn.addEventListener('click', () => {
-        const target = normalizeTarget(urlInput.value.trim());
-        if (!target) return;
-        if (!isDuplicateReady) {
-            openPopup(target);
-            return;
-        }
-        try {
-            const width = Math.floor(window.screen.availWidth / 2);
-            const height = window.screen.availHeight;
-            const popup = window.open('', popupName, `popup,width=${width},height=${height},left=0,top=0`);
-            if (!popup) {
-                status.textContent = '遷移先を前面にできませんでした。ポップアップを許可して、もう一度押してください。';
-                return;
-            }
-            try {
-                if (popup.location.href === 'about:blank') popup.location.href = target;
-            } catch {}
-            popup.focus();
-            window.close();
-            if (!window.closed) {
-                status.textContent = '遷移先を前面にしました。このタブは閉じられないため、手動で閉じてください。';
-            }
-        } catch {
-            status.textContent = '遷移先を前面にできませんでした。このタブを閉じずに、もう一度お試しください。';
-        }
-    });
+    focusBtn.addEventListener('click', () => openPopup(normalizeTarget(urlInput.value.trim())));
     urlInput.addEventListener('input', updateBookmarklet);
     window.addEventListener('hashchange', consumeRequest);
     window.addEventListener('pagehide', event => {
@@ -318,9 +291,11 @@
                 if (message.type !== 'HANDLED' || !pendingRequests.has(message.requestId)) return;
                 pendingRequests.delete(message.requestId);
                 if (pendingRequests.size) return;
-                isDuplicateReady = true;
-                focusBtn.textContent = '遷移先を最前面に表示して閉じる';
-                status.textContent = '引き継ぎました。遷移先を前面に表示するには、このボタンを押してください。';
+                status.textContent = '管理中の中継ページに引き継ぎました。この重複ページを閉じます。';
+                window.close();
+                if (!window.closed) {
+                    status.textContent = '管理中の中継ページに引き継ぎました。このタブを閉じてください。';
+                }
                 return;
             }
             const target = message.type === 'OPEN' ? normalizeTarget(message.target) : null;
