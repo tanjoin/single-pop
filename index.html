@@ -5,71 +5,130 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>single-pop</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             margin: 0;
-            padding: 32px 16px;
-            background: #fff;
-            color: #000;
-            max-width: 360px;
+            padding: 24px;
+            background: #ffffff;
+            color: #171717;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
         label {
-            display: block;
             font-size: 11px;
-            font-weight: bold;
-            margin-bottom: 4px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: #737373;
         }
         input {
             width: 100%;
-            padding: 4px 0;
+            padding: 8px 0;
             font-size: 13px;
+            color: #171717;
+            background: transparent;
             border: none;
-            border-bottom: 1px solid #000;
-            outline: none;
-            box-sizing: border-box;
+            border-bottom: 1px solid #d4d4d4;
             border-radius: 0;
+            outline: none;
+            transition: border-color 0.15s ease;
         }
-        .action {
-            margin-top: 16px;
+        input:focus {
+            border-bottom-color: #171717;
         }
-        a {
-            display: inline-block;
-            background: #000;
-            color: #fff;
-            padding: 6px 12px;
+        
+        .drag-zone {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        /* ドラッグ＆ドロップ専用パーツ（囲みなしの軽量アイテム） */
+        .drag-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f5f5f5;
+            color: #262626;
             font-size: 12px;
+            font-weight: 500;
             text-decoration: none;
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: grab;
+            user-select: none;
+            width: fit-content;
+            transition: background-color 0.15s ease;
         }
-        .help {
+        .drag-item:hover {
+            background: #e5e5e5;
+        }
+        .drag-item:active {
+            cursor: grabbing;
+        }
+        
+        /* ドラッグできることを示すグリップアイコン */
+        .drag-handle {
+            display: inline-block;
+            width: 10px;
+            height: 14px;
+            background: #a3a3a3;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
+        }
+
+        .help-text {
             font-size: 11px;
-            color: #666;
-            margin-top: 6px;
+            color: #a3a3a3;
+            line-height: 1.4;
         }
+
         .msg {
-            font-size: 12px;
-            font-weight: bold;
+            font-size: 13px;
+            color: #525252;
+            text-align: center;
             display: none;
         }
     </style>
 </head>
 <body>
 
-<div id="msg" class="msg">重複を検知したため閉じます...</div>
+<div id="msg" class="msg">重複を検知しました。タブを閉じています...</div>
 
-<div id="app">
-    <label for="url">SLACK URL</label>
-    <input type="text" id="url" placeholder="https://app.slack.com/client/...">
-    <div class="action">
-        <a id="bm" href="#" onclick="return false;">Slack Popup</a>
-        <div class="help">上のボタンをブックマークバーへドラッグ＆ドロップしてください</div>
+<div id="app" class="container">
+    <div class="field">
+        <label for="url">SLACK URL</label>
+        <input type="text" id="url" placeholder="https://app.slack.com/client/...">
+    </div>
+    
+    <div class="drag-zone">
+        <a id="bm" class="drag-item" href="#" onclick="return false;">
+            <span class="drag-handle"></span>
+            <span>Slack Popup (ブックマークバーへドラッグ)</span>
+        </a>
+        <div class="help-text">上記の要素をつかんでそのままブックマークバーへ追加してください</div>
     </div>
 </div>
 
 <script>
 (function() {
-    // 中継ページ自体として開かれた場合の判定・重複チェックロジック
     const urlParams = new URLSearchParams(window.location.search);
     const targetSlackUrl = urlParams.get('url');
 
@@ -78,32 +137,45 @@
         const msg = document.getElementById('msg');
         msg.style.display = 'block';
 
-        const channelName = 'single_pop_channel';
+        const channelName = 'single_pop_channel_' + btoa(targetSlackUrl).slice(-10);
         const bc = new BroadcastChannel(channelName);
         let responded = false;
 
-        // すでに開いている既存ウィンドウからの PONG 受信
+        // 既存の中継親タブがからの応答（PONG）待ち
         bc.onmessage = (e) => {
             if (e.data === 'PONG') {
                 responded = true;
-                // 重複していたのでこの中継タブを閉じる
+                // 既存の親タブがSlackにフォーカスしてくれたので、この中継タブは閉じる
                 bc.close();
                 window.close();
             }
         };
 
-        // 既存のウィンドウに問い合わせ
-        bc.postMessage('PING');
+        // 既存の中継親タブに問い合わせ
+        bc.postMessage({ type: 'PING' });
 
-        // 100ms 待って返答がなければ、新しいポップアップを開く
+        // 120ms 待っても返答がない場合 ＝ 自分が最初の親タブになる
         setTimeout(() => {
             if (!responded) {
                 const w = Math.floor(window.screen.width / 2);
-                window.open(targetSlackUrl, 'SingleSlackPop', `width=${w},height=${window.screen.height},left=0,top=0,resizable=yes,scrollbars=yes`);
+                const slackWin = window.open(targetSlackUrl, '_blank', `width=${w},height=${window.screen.height},left=0,top=0,resizable=yes,scrollbars=yes`);
+                
+                // 自分が「親」として常駐し、後から開かれた中継タブからの要求を処理する
+                bc.onmessage = (e) => {
+                    if (e.data && e.data.type === 'PING') {
+                        bc.postMessage('PONG');
+                        if (slackWin && !slackWin.closed) {
+                            slackWin.focus();
+                        } else {
+                            // もしポップアップが閉じられていたら再オープン
+                            window.open(targetSlackUrl, '_blank', `width=${w},height=${window.screen.height},left=0,top=0,resizable=yes,scrollbars=yes`);
+                        }
+                    }
+                };
+                
+                // 親タブ自体はユーザーの目につかないようバックグラウンドで動作し、必要時閉じる
+                msg.textContent = "Slackポップアップを起動しました。このタブを閉じると重複防止が解除されます。";
             }
-            bc.close();
-            // 処理完了後、この中継タブを閉じる
-            window.close();
         }, 120);
 
         return;
@@ -120,11 +192,9 @@
             return;
         }
 
-        // 現在の中継ページのURLを取得（クエリパラメータとして target URL を追加）
         const currentUrl = window.location.href.split('?')[0];
         const proxyUrl = currentUrl + '?url=' + encodeURIComponent(val);
 
-        // 新しいタブで中継ページを開くブックマークレットコード
         const code = `javascript:(() => { window.open('${proxyUrl}', '_blank'); })();`;
 
         bm.setAttribute('href', code);
