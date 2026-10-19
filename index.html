@@ -83,7 +83,7 @@
             width: 10px;
             height: 14px;
             background: #000000;
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
             -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Ccircle cx='2' cy='2' r='1.5'/%3E%3Ccircle cx='8' cy='2' r='1.5'/%3E%3Ccircle cx='2' cy='8' r='1.5'/%3E%3Ccircle cx='8' cy='8' r='1.5'/%3E%3Ccircle cx='2' cy='14' r='1.5'/%3E%3Ccircle cx='8' cy='14' r='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
         }
 
@@ -93,19 +93,19 @@
             line-height: 1.4;
         }
 
-        .msg {
-            font-size: 13px;
-            color: #000000;
+        .status {
+            font-size: 12px;
+            padding: 8px;
+            border: 1px solid #000000;
             text-align: center;
-            display: none;
         }
     </style>
 </head>
 <body>
 
-<div id="msg" class="msg">重複を検知しました。タブを閉じています...</div>
+<div class="container">
+    <div id="status" class="status">親タブ待機中</div>
 
-<div id="app" class="container">
     <div class="field">
         <label for="url">SLACK URL</label>
         <input type="text" id="url" placeholder="https://app.slack.com/client/...">
@@ -122,9 +122,44 @@
 
 <script>
 (function() {
+    const channel = new BroadcastChannel('slack_single_pop_channel');
+    const statusEl = document.getElementById('status');
     const urlInput = document.getElementById('url');
     const bm = document.getElementById('bm');
 
+    let slackWin = null;
+
+    // ブックマークレットからの要求を受け取ってSlackポップアップを開く/フォーカスする
+    channel.onmessage = (e) => {
+        if (!e.data || !e.data.targetUrl) return;
+        const targetUrl = e.data.targetUrl;
+
+        statusEl.textContent = 'リクエスト受信: ' + targetUrl;
+
+        // すでにウィンドウが開いており、閉じられていない場合
+        if (slackWin && !slackWin.closed) {
+            // URLが違う場合は切り替え
+            try {
+                if (slackWin.location.href !== targetUrl) {
+                    slackWin.location.href = targetUrl;
+                }
+            } catch(err) {
+                // クロスオリジンでhrefが読めない場合はそのまま上書き
+                slackWin.location.href = targetUrl;
+            }
+            slackWin.focus();
+        } else {
+            // 新規にポップアップを作成
+            const w = Math.floor(window.screen.width / 2);
+            const h = window.screen.height;
+            slackWin = window.open(targetUrl, 'single_slack_popup_win', `width=${w},height=${h},left=0,top=0,resizable=yes,scrollbars=yes`);
+            if (slackWin) {
+                slackWin.focus();
+            }
+        }
+    };
+
+    // ブックマークレットのコード生成
     urlInput.addEventListener('input', () => {
         const val = urlInput.value.trim();
         if (!val) {
@@ -132,23 +167,11 @@
             return;
         }
 
-        // URLから英数字のみの固有ウィンドウ名を生成
-        const winName = 'slack_pop_' + val.replace(/[^a-zA-Z0-9]/g, '');
-
-        // 中継ページを一切挟まず、ブラウザのウィンドウ名制御で直接開く・フォーカスするコード
+        // BroadcastChannel 経由で親タブにURLを送るだけのブックマークレット
         const code = `javascript:(() => {
-            const w = Math.floor(window.screen.width / 2);
-            const h = window.screen.height;
-            const targetUrl = '${val.replace(/'/g, "\\'")}';
-            const winName = '${winName}';
-            
-            const win = window.open('', winName, \`width=\${w},height=\${h},left=0,top=0,resizable=yes,scrollbars=yes\`);
-            if (win) {
-                if (win.location.href === 'about:blank' || !win.location.href) {
-                    win.location.href = targetUrl;
-                }
-                win.focus();
-            }
+            const bc = new BroadcastChannel('slack_single_pop_channel');
+            bc.postMessage({ targetUrl: '${val.replace(/'/g, "\\'")}' });
+            bc.close();
         })();`;
 
         bm.setAttribute('href', code);
