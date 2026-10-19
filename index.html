@@ -116,6 +116,17 @@
             color: #000000;
             line-height: 1.5;
         }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #status {
+            font-size: 12px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
     </style>
 </head>
 <body>
@@ -123,7 +134,7 @@
 <div class="container">
     <div class="field">
         <label for="url">POPUP URL</label>
-        <input type="text" id="url" placeholder="https://app.slack.com/client/...">
+        <input type="url" id="url" placeholder="https://app.slack.com/client/..." autocomplete="url" required aria-describedby="status">
     </div>
     
     <div class="drag-zone">
@@ -134,11 +145,11 @@
         <div class="help-text">上記の要素をブラウザのブックマークバーへドラッグ＆ドロップして登録してください</div>
     </div>
 
-    <!-- 最前面に持ち上げるための手動ボタン -->
     <div class="field" style="margin-top: 10px;">
         <button id="focus-btn" type="button" style="width: 100%; padding: 12px; background: #000; color: #fff; border: 1px solid #000; font-size: 12px; font-weight: bold; cursor: pointer;">
             最前面に表示 / 起動
         </button>
+        <p id="status" role="status" aria-live="polite"></p>
     </div>
 </div>
 
@@ -147,138 +158,140 @@
     const urlInput = document.getElementById('url');
     const bm = document.getElementById('bm');
     const focusBtn = document.getElementById('focus-btn');
-
-    // 既に開いたポップアップのウィンドウ参照を保持する変数
+    const status = document.getElementById('status');
+    const hubName = 'single_pop_hub';
+    const popupName = 'single_pop_destination';
+    const storageKey = 'single-pop-target';
+    const requestKey = 'single-pop-request';
+    const hubUrl = new URL(window.location.href);
+    hubUrl.search = '';
+    hubUrl.hash = '';
     let activePopupWin = null;
+    let activeTarget = null;
+    let isOwner = true;
+    let channel = null;
 
-    // 中継タブ同士の重複制御用チャンネル
-    const bc = new BroadcastChannel('single_hub_tab_channel');
-
-    // ポップアップを開く/最前面化する共通関数（多重オープン完全防止）
-    function openPopup(target) {
-        if (!target) return;
-
-        // 既存のウィンドウが開いており、まだ閉じられていない場合はフォーカスのみ行う
-        if (activePopupWin && !activePopupWin.closed) {
-            try {
-                // URLを変更せずに再利用する場合はフォーカス、URLを変えたい場合はlocation更新
-                if (activePopupWin.location.href !== target) {
-                    activePopupWin.location.href = target;
-                }
-                activePopupWin.focus();
-                return;
-            } catch (e) {
-                // クロスドメイン等で参照エラーになった場合は新規開き直し（インスタンス再取得）
-                activePopupWin = null;
-            }
-        }
-
-        const w = Math.floor(window.screen.width / 2);
-        const h = window.screen.height;
-        // 同一ウィンドウ名を与えて強制的に単一化を図る
-        activePopupWin = window.open(target, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
-        if (activePopupWin) {
-            try {
-                activePopupWin.focus();
-            } catch (e) {}
+    function normalizeTarget(value) {
+        try {
+            const target = new URL(value);
+            return ['https:', 'http:'].includes(target.protocol) ? target.href : null;
+        } catch {
+            return null;
         }
     }
 
-    // 手動ボタンクリックによる起動・最前面化
-    focusBtn.addEventListener('click', () => {
-        const val = urlInput.value.trim();
-        openPopup(val);
-    });
-
-    // 入力変更に応じてブックマークレットを更新
-    urlInput.addEventListener('input', () => {
-        const val = urlInput.value.trim();
-        if (!val) {
+    function updateBookmarklet() {
+        const target = normalizeTarget(urlInput.value.trim());
+        focusBtn.disabled = !target;
+        bm.setAttribute('aria-disabled', String(!target));
+        if (!target) {
             bm.setAttribute('href', '#');
+            status.textContent = 'http:// または https:// のURLを入力してください。';
             return;
         }
+        try {
+            localStorage.setItem(storageKey, target);
+        } catch {}
+        const destination = new URL(hubUrl);
+        destination.hash = new URLSearchParams({ target, request: 'bookmarklet' }).toString();
+        const code = `(() => { const popup = window.open(${JSON.stringify(destination.href)} + '&nonce=' + Date.now() + Math.random(), ${JSON.stringify(hubName)}); if (popup) popup.focus(); })()`;
+        bm.setAttribute('href', 'javascript:' + encodeURIComponent(code));
+        status.textContent = '起動できます。';
+    }
 
-        const hubUrl = window.location.href.split('#')[0].split('?')[0];
-
-        // ブックマークレットコード: 中継タブがあればそこに通知、なければ新規タブで開く
-        const code = `javascript:(() => {
-            const target = '${encodeURIComponent(val)}';
-            const hub = '${hubUrl}';
-            
-            const channel = new BroadcastChannel('single_hub_tab_channel');
-            let acknowledged = false;
-            
-            channel.onmessage = (e) => {
-                if (e.data && e.data.type === 'HUB_ALREADY_OPEN') {
-                    acknowledged = true;
-                }
-            };
-            
-            channel.postMessage({ type: 'CHECK_HUB_OPEN', target: target });
-            
-            setTimeout(() => {
-                if (!acknowledged) {
-                    window.open(hub + '?target=' + target, '_blank');
-                }
-            }, 100);
-        })();`;
-
-        bm.setAttribute('href', code);
-    });
-
-    // ページ読み込み時にパラメータがあるかチェック（ブックマークレット経由の場合のみ起動）
-    const params = new URLSearchParams(window.location.search);
-    const targetUrl = params.get('target');
-
-    if (targetUrl) {
-        const decodedUrl = decodeURIComponent(targetUrl);
-        urlInput.value = decodedUrl;
-
-        // リロード時に勝手にポップアップが開くのを防ぐためURLからパラメータを即座に削除
-        if (window.history && window.history.replaceState) {
-            window.history.replaceState({}, document.title, window.location.pathname);
+    function openPopup(target) {
+        if (!target) return;
+        if (!isOwner) {
+            channel.postMessage({ type: 'OPEN', target });
+            status.textContent = '管理中の中継ページに送信しました。前面に出ない場合は、そのページのボタンを押してください。';
+            return;
         }
+        try {
+            if (activePopupWin && !activePopupWin.closed) {
+                if (activeTarget !== target) activePopupWin.location.href = target;
+            } else {
+                const width = Math.floor(window.screen.availWidth / 2);
+                const height = window.screen.availHeight;
+                activePopupWin = window.open(target, popupName, `popup,width=${width},height=${height},left=0,top=0`);
+            }
+            if (!activePopupWin) {
+                status.textContent = 'ポップアップがブロックされました。「最前面に表示 / 起動」を押してください。';
+                return;
+            }
+            activeTarget = target;
+            activePopupWin.focus();
+            status.textContent = '表示を要求しました。前面に出ない場合は「最前面に表示 / 起動」を押してください。';
+        } catch {
+            status.textContent = 'ブラウザーまたは遷移先の制限で操作できません。既存の遷移先ウィンドウを確認してください。';
+        }
+    }
 
-        let isDuplicate = false;
+    function consumeRequest(initialLoad = false) {
+        const current = new URL(window.location.href);
+        const fragment = new URLSearchParams(current.hash.slice(1));
+        const rawTarget = fragment.get('request') === 'bookmarklet'
+            ? fragment.get('target') : current.searchParams.get('target');
+        if (rawTarget === null) return;
+        const requestId = current.href;
+        window.history.replaceState(null, '', hubUrl.href);
+        const target = normalizeTarget(rawTarget);
+        if (!target) {
+            status.textContent = '起動要求のURLが不正です。http(s) のURLを指定してください。';
+            return;
+        }
+        urlInput.value = target;
+        updateBookmarklet();
+        const navigation = performance.getEntriesByType('navigation')[0];
+        if (initialLoad === true && navigation && ['reload', 'back_forward'].includes(navigation.type)) return;
+        try {
+            if (sessionStorage.getItem(requestKey) === requestId) return;
+            sessionStorage.setItem(requestKey, requestId);
+        } catch {}
+        openPopup(target);
+    }
 
-        // 他の中継タブが存在するかチェック
-        bc.postMessage({ type: 'CHECK_HUB_OPEN', target: decodedUrl });
+    focusBtn.addEventListener('click', () => openPopup(normalizeTarget(urlInput.value.trim())));
+    urlInput.addEventListener('input', updateBookmarklet);
+    window.addEventListener('hashchange', consumeRequest);
 
-        // メッセージリスナー
-        bc.onmessage = (e) => {
-            if (e.data.type === 'HUB_ALREADY_OPEN') {
-                // 既に他のタブがアクティブな場合は、新しく開いたこの重複タブを閉じる
-                isDuplicate = true;
-                window.close();
-            } else if (e.data.type === 'CHECK_HUB_OPEN') {
-                // 自分が「既存の中継タブ」である場合、新規タブに対して存在を通知し、ポップアップを開く
-                bc.postMessage({ type: 'HUB_ALREADY_OPEN' });
+    try {
+        urlInput.value = localStorage.getItem(storageKey) || '';
+    } catch {}
+    updateBookmarklet();
+
+    if ('BroadcastChannel' in window && navigator.locks) {
+        channel = new BroadcastChannel('single_pop_hub');
+        isOwner = false;
+        function takeOwnership() {
+            isOwner = true;
+            window.name = hubName;
+            updateBookmarklet();
+            channel.onmessage = event => {
+                const target = event.data && event.data.type === 'OPEN'
+                    ? normalizeTarget(event.data.target) : null;
+                if (!target) return;
+                urlInput.value = target;
+                updateBookmarklet();
                 window.focus();
-                if (e.data.target) {
-                    urlInput.value = e.data.target;
-                    openPopup(e.data.target);
-                }
-            }
-        };
-
-        // 少し待って重複がなければ自分が唯一の中継タブとして動作する
-        setTimeout(() => {
-            if (!isDuplicate) {
-                openPopup(decodedUrl);
-            }
-        }, 150);
+                openPopup(target);
+            };
+        }
+        navigator.locks.request('single_pop_hub_owner', { ifAvailable: true }, lock => {
+            isOwner = Boolean(lock);
+            if (isOwner) takeOwnership();
+            consumeRequest(true);
+            if (isOwner) return new Promise(() => {});
+            status.textContent = '別の中継ページが遷移先を管理しています。操作は管理中のページから行ってください。';
+            return navigator.locks.request('single_pop_hub_owner', () => {
+                takeOwnership();
+                return new Promise(() => {});
+            });
+        }).catch(() => {
+            status.textContent = '中継ページの管理を開始できませんでした。このページを開き直してください。';
+        });
     } else {
-        // 通常開かれた中継タブも他からのアクティブ化要求をリッスン
-        bc.onmessage = (e) => {
-            if (e.data.type === 'CHECK_HUB_OPEN') {
-                bc.postMessage({ type: 'HUB_ALREADY_OPEN' });
-                window.focus();
-                if (e.data.target) {
-                    urlInput.value = e.data.target;
-                    openPopup(e.data.target);
-                }
-            }
-        };
+        window.name = hubName;
+        consumeRequest(true);
     }
 })();
 </script>
