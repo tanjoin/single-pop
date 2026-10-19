@@ -173,42 +173,22 @@
     if (targetUrl) {
         const decodedUrl = decodeURIComponent(targetUrl);
         
-        const bc = new BroadcastChannel('single_slack_channel');
-        let hasOwner = false;
+        // ユーザー操作の直後（中継ページ起動時）に直接ウィンドウ名（'single_slack_window_instance'）を指定して開く/フォーカスする
+        // これによりブラウザのアクティブ化権限（User Activation）を保持したまま最前面に持ち上げる
+        const w = Math.floor(window.screen.width / 2);
+        const h = window.screen.height;
+        const slackWin = window.open(decodedUrl, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
 
-        bc.onmessage = (e) => {
-            if (e.data && e.data.type === 'PONG') {
-                hasOwner = true;
-                setTimeout(() => window.close(), 100);
-            }
-        };
+        if (slackWin) {
+            try {
+                slackWin.focus();
+            } catch (e) {}
+        }
 
-        bc.postMessage({ type: 'PING' });
-
+        // 開いた後、他の古い中継タブや重複の重複処理を避けるため、即座にこの中継タブ自体は閉じる
         setTimeout(() => {
-            if (!hasOwner) {
-                const w = Math.floor(window.screen.width / 2);
-                const h = window.screen.height;
-                const slackWin = window.open(decodedUrl, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
-
-                bc.onmessage = (e) => {
-                    if (e.data && e.data.type === 'PING') {
-                        if (slackWin && !slackWin.closed) {
-                            try {
-                                slackWin.moveBy(1, 1);
-                                slackWin.moveBy(-1, -1);
-                                slackWin.resizeBy(1, 1);
-                                slackWin.resizeBy(-1, -1);
-                                slackWin.focus();
-                            } catch (err) {
-                                console.log(err);
-                            }
-                            bc.postMessage({ type: 'PONG' });
-                        }
-                    }
-                };
-            }
-        }, 200);
+            window.close();
+        }, 100);
     }
 })();
 </script>
