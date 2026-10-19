@@ -117,29 +117,11 @@
             color: #000000;
             line-height: 1.5;
         }
-
-        .status-bar {
-            font-size: 12px;
-            padding: 10px 14px;
-            background: #ffffff;
-            color: #000000;
-            border: 1px solid #000000;
-            border-radius: 0px;
-            min-height: 38px;
-            display: flex;
-            align-items: center;
-        }
-
-        .status-bar:empty {
-            display: none;
-        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="status" class="status-bar"></div>
-
     <div class="field">
         <label for="url">POPUP URL</label>
         <input type="text" id="url" placeholder="https://app.slack.com/client/...">
@@ -158,21 +140,13 @@
 (function() {
     const urlInput = document.getElementById('url');
     const bm = document.getElementById('bm');
-    const status = document.getElementById('status');
-
-    function updateStatus(msg) {
-        status.textContent = msg;
-    }
 
     urlInput.addEventListener('input', () => {
         const val = urlInput.value.trim();
         if (!val) {
             bm.setAttribute('href', '#');
-            updateStatus('');
             return;
         }
-
-        updateStatus('ブックマーク準備完了（バーへドラッグ＆ドロップ）');
 
         const hubUrl = window.location.href.split('#')[0].split('?')[0];
 
@@ -189,7 +163,6 @@
     const targetUrl = params.get('target');
 
     if (targetUrl) {
-        updateStatus('起動中...');
         const decodedUrl = decodeURIComponent(targetUrl);
         
         const bc = new BroadcastChannel('single_slack_channel');
@@ -198,19 +171,6 @@
         bc.onmessage = (e) => {
             if (e.data && e.data.type === 'PONG') {
                 hasOwner = true;
-                
-                // 【Option 2: 親タブのアクティブ化権限を利用した最前面引き揚げ】
-                // Mac等で最前面に出ない対策：ユーザーアクション直後の親タブから直接既存ウィンドウ名を開き直す
-                try {
-                    const slackWin = window.open('', 'single_slack_window_instance');
-                    if (slackWin) {
-                        slackWin.focus();
-                    }
-                } catch (err) {
-                    console.log(err);
-                }
-
-                updateStatus('既存ウィンドウに切り替えました（このタブを閉じます）');
                 setTimeout(() => window.close(), 100);
             }
         };
@@ -221,15 +181,11 @@
             if (!hasOwner) {
                 const w = Math.floor(window.screen.width / 2);
                 const h = window.screen.height;
-                // ウィンドウ名を固定して開く
                 const slackWin = window.open(decodedUrl, 'single_slack_window_instance', `width=${w},height=${h},left=0,top=0`);
-
-                updateStatus('起動完了（単一ウィンドウ実行中）');
 
                 bc.onmessage = (e) => {
                     if (e.data && e.data.type === 'PING') {
                         if (slackWin && !slackWin.closed) {
-                            // 裏技手法の併用
                             try {
                                 slackWin.moveBy(1, 1);
                                 slackWin.moveBy(-1, -1);
