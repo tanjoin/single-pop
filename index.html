@@ -134,7 +134,7 @@
         <div class="help-text">上記の要素をブラウザのブックマークバーへドラッグ＆ドロップして登録してください</div>
     </div>
 
-    <!-- 手動で最前面に持ち上げるためのボタン -->
+    <!-- 最前面に持ち上げるための手動ボタン -->
     <div class="field" style="margin-top: 10px;">
         <button id="focus-btn" type="button" style="width: 100%; padding: 12px; background: #000; color: #fff; border: 1px solid #000; font-size: 12px; font-weight: bold; cursor: pointer;">
             最前面に表示 / 起動
@@ -185,7 +185,6 @@
             const target = '${encodeURIComponent(val)}';
             const hub = '${hubUrl}';
             
-            // 既に中継ページが開いているかBroadcastChannelで打診する
             const channel = new BroadcastChannel('single_hub_tab_channel');
             let acknowledged = false;
             
