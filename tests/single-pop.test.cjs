@@ -8,6 +8,11 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const hub = 'https://hub.example/index.html';
 
+test('page declares its popup favicon', () => {
+    assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="favicon\.svg">/);
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'favicon.svg'), 'utf8'), /<svg[\s>]/);
+});
+
 function requestUrl(target, nonce = '1') {
     return hub + '#' + new URLSearchParams({ target, request: 'bookmarklet', nonce });
 }
